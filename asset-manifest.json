@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/ed-spelling-bee/static/css/main.c2a2c8fc.css",
+    "main.js": "/ed-spelling-bee/static/js/main.31c27cc0.js",
+    "static/js/453.f06c4a57.chunk.js": "/ed-spelling-bee/static/js/453.f06c4a57.chunk.js",
+    "index.html": "/ed-spelling-bee/index.html",
+    "main.c2a2c8fc.css.map": "/ed-spelling-bee/static/css/main.c2a2c8fc.css.map",
+    "main.31c27cc0.js.map": "/ed-spelling-bee/static/js/main.31c27cc0.js.map",
+    "453.f06c4a57.chunk.js.map": "/ed-spelling-bee/static/js/453.f06c4a57.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c2a2c8fc.css",
+    "static/js/main.31c27cc0.js"
+  ]
+}
