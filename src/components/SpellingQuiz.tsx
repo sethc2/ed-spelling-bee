@@ -7,8 +7,9 @@ import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
+import { useDictionary } from '../hooks/useDictionary';
 import { SpellingWord, checkSpelling, getDifficultyLabel, getDifficultyColor } from '../data/words';
-import { Check, Home, Send, RotateCcw } from 'lucide-react';
+import { Home, Send, RotateCcw } from 'lucide-react';
 
 interface SpellingQuizProps {
   words: SpellingWord[];
@@ -35,6 +36,9 @@ export function SpellingQuiz({
   const currentWord = words[currentIndex];
   const progress = ((currentIndex) / words.length) * 100;
 
+  // Fetch dictionary data for current word
+  const { wordData, isLoading: isLoadingDictionary } = useDictionary(currentWord.word);
+
   const {
     isListening,
     characters,
@@ -47,6 +51,7 @@ export function SpellingQuiz({
   } = useSpeechRecognition(currentWord.word);
 
   const {
+    speak,
     speakWord,
     isSpeaking,
     isSupported: isTTSSupported,
@@ -124,6 +129,21 @@ export function SpellingQuiz({
     }, 200);
   }, [stopListening, checkAnswer]);
 
+  const handleHearDefinition = useCallback(() => {
+    if (wordData?.definition) {
+      const text = wordData.partOfSpeech 
+        ? `${wordData.partOfSpeech}. ${wordData.definition}`
+        : wordData.definition;
+      speak(text);
+    }
+  }, [wordData, speak]);
+
+  const handleHearExample = useCallback(() => {
+    if (wordData?.example) {
+      speak(wordData.example);
+    }
+  }, [wordData, speak]);
+
   if (!isSpeechSupported) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -185,15 +205,33 @@ export function SpellingQuiz({
                 <span className="ml-2 text-purple-600">(alternate spelling accepted)</span>
               )}
             </p>
+            {/* Show phonetic if available */}
+            {wordData?.phonetic && (
+              <p className="text-[#1A1A2E]/40 text-sm mt-1 font-mono">
+                {wordData.phonetic}
+              </p>
+            )}
           </div>
 
           {/* Word Controls */}
           <WordControls
             onHearWord={() => speakWord(currentWord.word)}
+            onHearDefinition={handleHearDefinition}
+            onHearExample={handleHearExample}
             onReset={handleReset}
             isSpeaking={isSpeaking}
+            hasDefinition={!!wordData?.definition}
+            hasExample={!!wordData?.example}
+            isLoadingDictionary={isLoadingDictionary}
             disabled={showResult}
           />
+
+          {/* Dictionary Status */}
+          {!isLoadingDictionary && wordData?.notFound && (
+            <p className="text-center text-gray-500 text-xs">
+              📚 Definition not available for this word
+            </p>
+          )}
 
           {/* Letter Display */}
           <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-4 md:p-6 shadow-lg border border-[#F4B942]/20">
@@ -215,6 +253,21 @@ export function SpellingQuiz({
               <p className="text-blue-600 text-xs mt-1">
                 Example: "Apple. A-P-P-L-E. Apple."
               </p>
+            </div>
+          )}
+
+          {/* Show definition after answering */}
+          {showResult && wordData?.definition && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <p className="text-amber-900 text-sm">
+                <strong className="capitalize">{wordData.partOfSpeech || 'Definition'}:</strong>{' '}
+                {wordData.definition}
+              </p>
+              {wordData.example && (
+                <p className="text-amber-700 text-sm mt-2 italic">
+                  Example: "{wordData.example}"
+                </p>
+              )}
             </div>
           )}
 

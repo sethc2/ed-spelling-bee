@@ -28,13 +28,14 @@ function App() {
 
   const {
     settings,
+    words,
     isLoaded,
     saveSettings,
-    addCustomWord,
-    removeCustomWord,
-    updateCustomWord,
-    getActiveWords,
-    resetSettings,
+    addWord,
+    removeWord,
+    updateWord,
+    resetWords,
+    resetAll,
   } = useSettings();
 
   const {
@@ -51,14 +52,13 @@ function App() {
   }, []);
 
   const handleStartQuiz = useCallback((difficulty: 1 | 2 | 3 | 'all', count: number) => {
-    const activeWords = getActiveWords();
-    const availableWords = getWordsByDifficulty(activeWords, difficulty);
+    const availableWords = getWordsByDifficulty(words, difficulty);
     const shuffled = shuffleArray(availableWords);
     const selected = shuffled.slice(0, Math.min(count, shuffled.length));
     setQuizWords(selected);
     setLastSettings({ difficulty, count });
     setCurrentScreen('quiz');
-  }, [getActiveWords]);
+  }, [words]);
 
   const handleQuizComplete = useCallback((score: number, total: number) => {
     setLastScore({ score, total });
@@ -100,11 +100,19 @@ function App() {
     speak(text, { rate, voiceURI });
   }, [speak]);
 
-  const handleResetSettings = useCallback(() => {
-    resetSettings();
-    setHighScore(null);
-    localStorage.removeItem('spellingBeeHighScore');
-  }, [resetSettings]);
+  const handleResetAll = useCallback(() => {
+    if (window.confirm('Are you sure you want to reset all settings and restore the original word list?')) {
+      resetAll();
+      setHighScore(null);
+      localStorage.removeItem('spellingBeeHighScore');
+    }
+  }, [resetAll]);
+
+  const handleResetWords = useCallback(() => {
+    if (window.confirm('Are you sure you want to restore the original word list? Your voice settings will be kept.')) {
+      resetWords();
+    }
+  }, [resetWords]);
 
   if (!isLoaded) {
     return (
@@ -117,8 +125,6 @@ function App() {
     );
   }
 
-  const activeWords = getActiveWords();
-
   return (
     <div className="min-h-screen">
       {currentScreen === 'home' && (
@@ -126,7 +132,7 @@ function App() {
           onStartQuiz={handleStartQuiz}
           onOpenSettings={handleOpenSettings}
           highScore={highScore}
-          wordCount={activeWords.length}
+          wordCount={words.length}
         />
       )}
       
@@ -153,11 +159,13 @@ function App() {
       {currentScreen === 'settings' && (
         <SettingsPage
           settings={settings}
+          words={words}
           onSaveSettings={saveSettings}
-          onAddWord={addCustomWord}
-          onRemoveWord={removeCustomWord}
-          onUpdateWord={updateCustomWord}
-          onResetSettings={handleResetSettings}
+          onAddWord={addWord}
+          onRemoveWord={removeWord}
+          onUpdateWord={updateWord}
+          onResetWords={handleResetWords}
+          onResetAll={handleResetAll}
           onBack={handleGoHome}
           voices={voices}
           onTestVoice={handleTestVoice}

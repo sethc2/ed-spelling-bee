@@ -4,45 +4,44 @@ import { SpellingWord, defaultWords } from '../data/words';
 export interface AppSettings {
   speechRate: number; // 0.5 to 2
   speechVoice: string; // voice URI or empty for default
-  customWords: SpellingWord[];
-  useCustomWords: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   speechRate: 0.9,
   speechVoice: '',
-  customWords: [],
-  useCustomWords: false,
 };
 
 const STORAGE_KEY = 'spellingBeeSettings';
-const CUSTOM_WORDS_KEY = 'spellingBeeCustomWords';
+const WORDS_KEY = 'spellingBeeWords';
 
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [words, setWords] = useState<SpellingWord[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load settings from localStorage
+  // Load settings and words from localStorage
   useEffect(() => {
     try {
+      // Load settings
       const savedSettings = localStorage.getItem(STORAGE_KEY);
-      const savedCustomWords = localStorage.getItem(CUSTOM_WORDS_KEY);
-      
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        setSettings(prev => ({
-          ...prev,
-          ...parsed,
-          customWords: savedCustomWords ? JSON.parse(savedCustomWords) : [],
-        }));
-      } else if (savedCustomWords) {
-        setSettings(prev => ({
-          ...prev,
-          customWords: JSON.parse(savedCustomWords),
-        }));
+        setSettings(prev => ({ ...prev, ...parsed }));
+      }
+      
+      // Load words - if none saved, use default words and save them
+      const savedWords = localStorage.getItem(WORDS_KEY);
+      if (savedWords) {
+        setWords(JSON.parse(savedWords));
+      } else {
+        // First time load - populate with default words
+        setWords(defaultWords);
+        localStorage.setItem(WORDS_KEY, JSON.stringify(defaultWords));
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
+      // Fallback to defaults
+      setWords(defaultWords);
     }
     setIsLoaded(true);
   }, []);
@@ -51,76 +50,62 @@ export function useSettings() {
   const saveSettings = useCallback((newSettings: Partial<AppSettings>) => {
     setSettings(prev => {
       const updated = { ...prev, ...newSettings };
-      
-      // Save to localStorage (excluding customWords which has its own key)
-      const { customWords, ...settingsToSave } = updated;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
-      
-      // Save custom words separately
-      if (newSettings.customWords !== undefined) {
-        localStorage.setItem(CUSTOM_WORDS_KEY, JSON.stringify(updated.customWords));
-      }
-      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);
 
-  const addCustomWord = useCallback((word: SpellingWord) => {
-    setSettings(prev => {
-      const updated = {
-        ...prev,
-        customWords: [...prev.customWords, word],
-      };
-      localStorage.setItem(CUSTOM_WORDS_KEY, JSON.stringify(updated.customWords));
+  // Add a new word
+  const addWord = useCallback((word: SpellingWord) => {
+    setWords(prev => {
+      const updated = [...prev, word];
+      localStorage.setItem(WORDS_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);
 
-  const removeCustomWord = useCallback((index: number) => {
-    setSettings(prev => {
-      const updated = {
-        ...prev,
-        customWords: prev.customWords.filter((_, i) => i !== index),
-      };
-      localStorage.setItem(CUSTOM_WORDS_KEY, JSON.stringify(updated.customWords));
+  // Remove a word by index
+  const removeWord = useCallback((index: number) => {
+    setWords(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      localStorage.setItem(WORDS_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);
 
-  const updateCustomWord = useCallback((index: number, word: SpellingWord) => {
-    setSettings(prev => {
-      const newCustomWords = [...prev.customWords];
-      newCustomWords[index] = word;
-      const updated = {
-        ...prev,
-        customWords: newCustomWords,
-      };
-      localStorage.setItem(CUSTOM_WORDS_KEY, JSON.stringify(updated.customWords));
+  // Update a word at index
+  const updateWord = useCallback((index: number, word: SpellingWord) => {
+    setWords(prev => {
+      const updated = [...prev];
+      updated[index] = word;
+      localStorage.setItem(WORDS_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);
 
-  const getActiveWords = useCallback((): SpellingWord[] => {
-    if (settings.useCustomWords && settings.customWords.length > 0) {
-      return settings.customWords;
-    }
-    return defaultWords;
-  }, [settings.useCustomWords, settings.customWords]);
+  // Reset words to default list
+  const resetWords = useCallback(() => {
+    setWords(defaultWords);
+    localStorage.setItem(WORDS_KEY, JSON.stringify(defaultWords));
+  }, []);
 
-  const resetSettings = useCallback(() => {
+  // Reset everything (settings and words)
+  const resetAll = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(CUSTOM_WORDS_KEY);
+    setWords(defaultWords);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    localStorage.setItem(WORDS_KEY, JSON.stringify(defaultWords));
   }, []);
 
   return {
     settings,
+    words,
     isLoaded,
     saveSettings,
-    addCustomWord,
-    removeCustomWord,
-    updateCustomWord,
-    getActiveWords,
-    resetSettings,
+    addWord,
+    removeWord,
+    updateWord,
+    resetWords,
+    resetAll,
   };
 }
