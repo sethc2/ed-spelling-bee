@@ -10,15 +10,20 @@ import {
   RotateCcw,
   BookOpen,
   Search,
-  Filter
+  Filter,
+  Edit2,
+  X,
+  Check,
+  List
 } from 'lucide-react';
-import { AppSettings } from '../hooks/useSettings';
+import { AppSettings, CustomWordList } from '../hooks/useSettings';
 import { SpellingWord, getDifficultyLabel } from '../data/words';
 import { cn } from '../lib/utils';
 
 interface SettingsPageProps {
   settings: AppSettings;
   words: SpellingWord[];
+  customLists: CustomWordList[];
   onSaveSettings: (settings: Partial<AppSettings>) => void;
   onAddWord: (word: SpellingWord) => void;
   onRemoveWord: (index: number) => void;
@@ -28,11 +33,14 @@ interface SettingsPageProps {
   onBack: () => void;
   voices: SpeechSynthesisVoice[];
   onTestVoice: (text: string, rate: number, voiceURI: string) => void;
+  onSaveCustomList: (name: string, wordIds: string[]) => void;
+  onDeleteCustomList: (name: string) => void;
 }
 
 export function SettingsPage({
   settings,
   words,
+  customLists,
   onSaveSettings,
   onAddWord,
   onRemoveWord,
@@ -41,6 +49,8 @@ export function SettingsPage({
   onBack,
   voices,
   onTestVoice,
+  onSaveCustomList,
+  onDeleteCustomList,
 }: SettingsPageProps) {
   const [speechRate, setSpeechRate] = useState(settings.speechRate);
   const [selectedVoice, setSelectedVoice] = useState(settings.speechVoice);
@@ -53,6 +63,11 @@ export function SettingsPage({
   // Word list filters
   const [searchQuery, setSearchQuery] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<1 | 2 | 3 | 'all'>('all');
+  
+  // Custom list management
+  const [newListName, setNewListName] = useState('');
+  const [editingListName, setEditingListName] = useState<string | null>(null);
+  const [editingListWords, setEditingListWords] = useState<string[]>([]);
   
   // Filter voices to English ones
   const englishVoices = voices.filter(v => v.lang.startsWith('en'));
@@ -117,14 +132,56 @@ export function SettingsPage({
     return words.findIndex(w => w.word === word.word);
   };
 
+  // Custom list handlers
+  const handleCreateList = () => {
+    if (!newListName.trim()) {
+      alert('Please enter a list name');
+      return;
+    }
+    onSaveCustomList(newListName.trim(), []);
+    setNewListName('');
+  };
+
+  const handleStartEdit = (list: CustomWordList) => {
+    setEditingListName(list.name);
+    setEditingListWords([...list.wordIds]);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingListName(null);
+    setEditingListWords([]);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingListName) return;
+    onSaveCustomList(editingListName, editingListWords);
+    setEditingListName(null);
+    setEditingListWords([]);
+  };
+
+  const handleToggleWordInList = (wordId: string) => {
+    if (!editingListName) return;
+    setEditingListWords(prev => 
+      prev.includes(wordId)
+        ? prev.filter(id => id !== wordId)
+        : [...prev, wordId]
+    );
+  };
+
+  const handleDeleteList = (name: string) => {
+    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
+      onDeleteCustomList(name);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FEF9EF] via-[#FFF8E7] to-[#FEF3C7]">
       {/* Header */}
       <header className="bg-white/50 backdrop-blur-sm border-b border-[#F4B942]/20 p-4 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
-          <Button onClick={onBack} variant="ghost" size="sm" className="gap-2">
+          <Button onClick={onBack} variant="ghost" size="sm" className="gap-2 text-[#1A1A2E]">
             <ArrowLeft className="w-4 h-4" />
-            Back
+            Home
           </Button>
           <h1 className="text-2xl font-bold text-[#1A1A2E]">Settings</h1>
         </div>
@@ -330,6 +387,162 @@ export function SettingsPage({
               )}
             </div>
           </div>
+        </section>
+
+        {/* Custom Lists Section */}
+        <section className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-[#F4B942]/20">
+          <h2 className="text-xl font-bold text-[#1A1A2E] mb-6 flex items-center gap-2">
+            <List className="w-5 h-5 text-[#D4941C]" />
+            Custom Word Lists
+          </h2>
+
+          {/* Create New List */}
+          <div className="bg-[#FEF9EF] rounded-xl p-4 mb-6">
+            <h3 className="font-semibold text-[#1A1A2E] mb-3">Create New List</h3>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="List name (e.g., 'My Practice Words')"
+                value={newListName}
+                onChange={(e) => setNewListName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateList()}
+                className="flex-1 p-3 border-2 border-gray-200 rounded-xl focus:border-[#F4B942] focus:outline-none bg-white text-[#1A1A2E]"
+              />
+              <Button onClick={handleCreateList} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Create
+              </Button>
+            </div>
+          </div>
+
+          {/* Existing Lists */}
+          {customLists.length === 0 ? (
+            <div className="text-center p-6 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+              <p className="text-gray-500">No custom lists yet. Create one above!</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {customLists.map((list) => {
+                const isEditing = editingListName === list.name;
+                const listWords = words.filter(w => list.wordIds.includes(w.word));
+                
+                return (
+                  <div
+                    key={list.name}
+                    className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50"
+                  >
+                    {!isEditing ? (
+                      // View mode
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-[#1A1A2E]">{list.name}</h3>
+                            <p className="text-sm text-gray-500">
+                              {list.wordIds.length} word{list.wordIds.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleStartEdit(list)}
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              Edit
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteList(list.name)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {listWords.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {listWords.slice(0, 10).map((word) => (
+                              <span
+                                key={word.word}
+                                className="text-xs bg-white px-2 py-1 rounded-full border border-gray-200 text-[#1A1A2E] font-medium"
+                              >
+                                {word.word}
+                              </span>
+                            ))}
+                            {listWords.length > 10 && (
+                              <span className="text-xs text-gray-500 px-2 py-1">
+                                +{listWords.length - 10} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      // Edit mode
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <input
+                            type="text"
+                            value={editingListName}
+                            onChange={(e) => setEditingListName(e.target.value)}
+                            className="flex-1 p-2 border-2 border-gray-200 rounded-lg focus:border-[#F4B942] focus:outline-none bg-white font-semibold"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={handleSaveEdit}
+                              size="sm"
+                              className="gap-2"
+                            >
+                              <Check className="w-4 h-4" />
+                              Save
+                            </Button>
+                            <Button
+                              onClick={handleCancelEdit}
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                            >
+                              <X className="w-4 h-4" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto space-y-2">
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            Select words for this list:
+                          </p>
+                          {words.map((word) => {
+                            const isSelected = editingListWords.includes(word.word);
+                            return (
+                              <button
+                                key={word.word}
+                                onClick={() => handleToggleWordInList(word.word)}
+                                className={cn(
+                                  "w-full text-left p-2 rounded-lg border-2 transition-colors",
+                                  isSelected
+                                    ? "bg-[#F4B942]/20 border-[#F4B942]"
+                                    : "bg-white border-gray-200 hover:border-gray-300"
+                                )}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium text-[#1A1A2E]">{word.word}</span>
+                                  {isSelected && (
+                                    <Check className="w-4 h-4 text-[#D4941C]" />
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Reset Section */}

@@ -63,37 +63,48 @@ export function useTextToSpeech(defaultRate: number = 0.9, defaultVoiceURI: stri
         return;
       }
 
-      // Cancel any ongoing speech
+      // Cancel any ongoing speech and wait a bit for cleanup
       window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
       
-      const voice = getVoice(options?.voiceURI);
-      if (voice) {
-        utterance.voice = voice;
-      }
+      // Small delay to ensure previous utterance is fully cancelled
+      setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        const voice = getVoice(options?.voiceURI);
+        if (voice) {
+          utterance.voice = voice;
+        }
 
-      utterance.rate = options?.rate ?? speechRate;
-      utterance.pitch = options?.pitch ?? 1;
-      utterance.volume = 1;
+        utterance.rate = options?.rate ?? speechRate;
+        utterance.pitch = options?.pitch ?? 1;
+        utterance.volume = 1;
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        resolve();
-      };
-      utterance.onerror = (e) => {
-        setIsSpeaking(false);
-        reject(e);
-      };
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          resolve();
+        };
+        utterance.onerror = (e) => {
+          setIsSpeaking(false);
+          // 'interrupted' and 'canceled' are not real errors - they're expected when cancelling
+          if (e.error === 'interrupted' || e.error === 'canceled') {
+            resolve(); // Resolve instead of reject for expected cancellations
+          } else {
+            reject(e);
+          }
+        };
 
-      window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.speak(utterance);
+      }, 50); // Small delay to ensure clean state
     });
   }, [getVoice, speechRate]);
 
-  const speakWord = useCallback(async (word: string) => {
-    await speak(word, { rate: speechRate * 0.9 });
-  }, [speak, speechRate]);
+  const speakWord = useCallback(async (word: string, options?: TTSOptions) => {
+    await speak(word, { 
+      rate: options?.rate ?? speechRate * 0.9,
+      voiceURI: options?.voiceURI ?? selectedVoiceURI
+    });
+  }, [speak, speechRate, selectedVoiceURI]);
 
   const speakLetter = useCallback(async (letter: string) => {
     await speak(letter, { rate: speechRate });

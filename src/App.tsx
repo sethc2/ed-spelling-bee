@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { HomeScreen } from './components/HomeScreen';
-import { SpellingQuiz } from './components/SpellingQuiz';
+import { ListSelector } from './components/ListSelector';
+import { SpellingQuiz, QuizResult } from './components/SpellingQuiz';
 import { ResultsScreen } from './components/ResultsScreen';
 import { SettingsPage } from './components/SettingsPage';
 import { useSettings } from './hooks/useSettings';
 import { useTextToSpeech } from './hooks/useTextToSpeech';
-import { getWordsByDifficulty, shuffleArray, SpellingWord } from './data/words';
+import { shuffleArray, SpellingWord } from './data/words';
 import './App.css';
 
-type Screen = 'home' | 'quiz' | 'results' | 'settings';
+type Screen = 'home' | 'select' | 'quiz' | 'results' | 'settings';
 
 interface HighScore {
   score: number;
@@ -18,17 +19,14 @@ interface HighScore {
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [quizWords, setQuizWords] = useState<SpellingWord[]>([]);
-  const [lastScore, setLastScore] = useState<{ score: number; total: number } | null>(null);
+  const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
   const [highScore, setHighScore] = useState<HighScore | null>(null);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
-  const [lastSettings, setLastSettings] = useState<{ difficulty: 1 | 2 | 3 | 'all'; count: number }>({
-    difficulty: 'all',
-    count: 10
-  });
 
   const {
     settings,
     words,
+    customLists,
     isLoaded,
     saveSettings,
     addWord,
@@ -36,6 +34,10 @@ function App() {
     updateWord,
     resetWords,
     resetAll,
+    getWordsForList,
+    getWordsByDifficulty,
+    saveCustomList,
+    deleteCustomList,
   } = useSettings();
 
   const {
@@ -51,27 +53,45 @@ function App() {
     }
   }, []);
 
-  const handleStartQuiz = useCallback((difficulty: 1 | 2 | 3 | 'all', count: number) => {
-    const availableWords = getWordsByDifficulty(words, difficulty);
-    const shuffled = shuffleArray(availableWords);
-    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
-    setQuizWords(selected);
-    setLastSettings({ difficulty, count });
-    setCurrentScreen('quiz');
-  }, [words]);
+  const handleGoToSelect = useCallback(() => {
+    setCurrentScreen('select');
+  }, []);
 
-  const handleQuizComplete = useCallback((score: number, total: number) => {
-    setLastScore({ score, total });
+  const handleSelectPreset = useCallback((difficulty: 1 | 2 | 3 | 'all') => {
+    const selectedWords = getWordsByDifficulty(difficulty);
+    const shuffled = shuffleArray(selectedWords);
+    setQuizWords(shuffled);
+    setCurrentScreen('quiz');
+  }, [getWordsByDifficulty]);
+
+  const handleSelectCustomList = useCallback((listName: string) => {
+    const selectedWords = getWordsForList(listName);
+    const shuffled = shuffleArray(selectedWords);
+    setQuizWords(shuffled);
+    setCurrentScreen('quiz');
+  }, [getWordsForList]);
+
+  const handleQuizComplete = useCallback((results: QuizResult[]) => {
+    setQuizResults(results);
     
-    // Check for new high score
-    const percentage = score / total;
-    const currentHighPercentage = highScore ? highScore.score / highScore.total : 0;
+    // Only count answered words for high score
+    const answeredResults = results.filter(r => r.correct !== null);
+    const score = answeredResults.filter(r => r.correct === true).length;
+    const total = answeredResults.length;
     
-    if (percentage > currentHighPercentage || !highScore) {
-      const newHighScore = { score, total };
-      setHighScore(newHighScore);
-      setIsNewHighScore(true);
-      localStorage.setItem('spellingBeeHighScore', JSON.stringify(newHighScore));
+    // Check for new high score (only if there are answered words)
+    if (total > 0) {
+      const percentage = score / total;
+      const currentHighPercentage = highScore ? highScore.score / highScore.total : 0;
+      
+      if (percentage > currentHighPercentage || !highScore) {
+        const newHighScore = { score, total };
+        setHighScore(newHighScore);
+        setIsNewHighScore(true);
+        localStorage.setItem('spellingBeeHighScore', JSON.stringify(newHighScore));
+      } else {
+        setIsNewHighScore(false);
+      }
     } else {
       setIsNewHighScore(false);
     }
@@ -80,8 +100,9 @@ function App() {
   }, [highScore]);
 
   const handlePlayAgain = useCallback(() => {
-    handleStartQuiz(lastSettings.difficulty, lastSettings.count);
-  }, [handleStartQuiz, lastSettings]);
+    // Go back to word selection
+    setCurrentScreen('select');
+  }, []);
 
   const handleGoHome = useCallback(() => {
     setCurrentScreen('home');
@@ -114,6 +135,14 @@ function App() {
     }
   }, [resetWords]);
 
+  const handleSaveVoiceSettings = useCallback((rate: number, voice: string) => {
+    saveSettings({ speechRate: rate, speechVoice: voice });
+  }, [saveSettings]);
+
+  const handleSaveWrongWordsAsList = useCallback((wordIds: string[]) => {
+    saveCustomList('Last Wrong', wordIds);
+  }, [saveCustomList]);
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#FEF9EF] via-[#FFF8E7] to-[#FEF3C7]">
@@ -129,10 +158,20 @@ function App() {
     <div className="min-h-screen">
       {currentScreen === 'home' && (
         <HomeScreen
-          onStartQuiz={handleStartQuiz}
+          onStartQuiz={handleGoToSelect}
           onOpenSettings={handleOpenSettings}
           highScore={highScore}
           wordCount={words.length}
+        />
+      )}
+
+      {currentScreen === 'select' && (
+        <ListSelector
+          words={words}
+          customLists={customLists}
+          onSelectPreset={handleSelectPreset}
+          onSelectCustomList={handleSelectCustomList}
+          onBack={handleGoHome}
         />
       )}
       
@@ -143,16 +182,17 @@ function App() {
           onExit={handleExitQuiz}
           speechRate={settings.speechRate}
           speechVoice={settings.speechVoice}
+          onSaveVoiceSettings={handleSaveVoiceSettings}
         />
       )}
       
-      {currentScreen === 'results' && lastScore && (
+      {currentScreen === 'results' && quizResults.length > 0 && (
         <ResultsScreen
-          score={lastScore.score}
-          total={lastScore.total}
+          results={quizResults}
           onPlayAgain={handlePlayAgain}
           onGoHome={handleGoHome}
           isNewHighScore={isNewHighScore}
+          onSaveWrongWordsAsList={handleSaveWrongWordsAsList}
         />
       )}
 
@@ -160,6 +200,7 @@ function App() {
         <SettingsPage
           settings={settings}
           words={words}
+          customLists={customLists}
           onSaveSettings={saveSettings}
           onAddWord={addWord}
           onRemoveWord={removeWord}
@@ -169,6 +210,8 @@ function App() {
           onBack={handleGoHome}
           voices={voices}
           onTestVoice={handleTestVoice}
+          onSaveCustomList={saveCustomList}
+          onDeleteCustomList={deleteCustomList}
         />
       )}
     </div>
